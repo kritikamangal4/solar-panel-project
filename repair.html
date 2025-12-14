@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Solar Repair | AI SolarTech Labs</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+  body { font-family: 'Inter', sans-serif; background-color: #0d1117; color: #c9d1d9; }
+  .solar-gradient { background-image: linear-gradient(to right, #f59e0b, #eab308); }
+  .card { transition: transform 0.3s, box-shadow 0.3s; background-color: #161b22; border: 1px solid #30363d; }
+  .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(245, 158, 11, 0.2); }
+  #repair-map { height: 300px; border-radius: 0.5rem; border: 1px solid #4b5563; margin-bottom: 10px; }
+  .input-field { width: 100%; padding:0.5rem; border-radius:0.5rem; background:#1f242c; border:1px solid #4b5563; color:white; }
+</style>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.6.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.6.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "YOUR_FIREBASE_PROJECT.firebaseapp.com",
+  projectId: "YOUR_FIREBASE_PROJECT_ID",
+  storageBucket: "YOUR_FIREBASE_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+window.signInUser = async () => { try { await signInWithPopup(auth, provider); } catch(err){console.error(err); alert("Sign-in failed."); }};
+window.signOutUser = async () => { try { await signOut(auth); } catch(err){console.error(err); alert("Sign-out failed."); }};
+
+auth.onAuthStateChanged(user => {
+  const authUI = document.getElementById("auth-ui-container");
+  const submitBtn = document.getElementById("submit-repair-btn");
+  const authWarning = document.getElementById("auth-warning");
+  if(user){
+    authUI.innerHTML = `<div class="flex items-center space-x-2">
+      <img src="${user.photoURL}" class="w-8 h-8 rounded-full border border-gray-500">
+      <span class="text-sm font-medium">${user.displayName}</span>
+      <button onclick="signOutUser()" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Sign Out</button>
+    </div>`;
+    submitBtn.disabled = false;
+    authWarning.classList.add("hidden");
+  } else {
+    authUI.innerHTML = `<button onclick="signInUser()" class="px-3 py-1 rounded bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold text-sm">Sign In with Google</button>`;
+    submitBtn.disabled = true;
+    authWarning.classList.remove("hidden");
+  }
+});
+</script>
+</head>
+<body>
+<header class="bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50 shadow-lg border-b border-gray-700">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <h1 class="text-2xl font-extrabold text-white">
+      <a href="index.html" class="solar-gradient bg-clip-text text-transparent">AI SolarTech</a> Labs
+    </h1>
+    <div class="flex items-center space-x-4">
+      <nav class="hidden md:flex space-x-6">
+  <a href="index.html" class="hover:text-amber-400 font-semibold text-white">Home</a>
+  <a href="detection.html" class="hover:text-amber-400">Detection</a>
+  <a href="design.html" class="hover:text-amber-400">Design Assist</a>
+  <a href="installation.html" class="hover:text-amber-400">Installation</a>
+  <a href="repair.html" class="hover:text-amber-400">Repair</a>
+  <a href="login.html" class="hover:text-amber-400">Login</a>
+</nav>
+
+      <div id="auth-ui-container" class="ml-3 text-sm"></div>
+    </div>
+  </div>
+</header>
+
+<section class="py-16 bg-[#161b22] border-t border-gray-700">
+  <div class="max-w-5xl mx-auto px-4 text-center">
+    <h2 class="text-4xl font-bold text-white mb-4 flex items-center justify-center">
+      <i data-lucide="tool" class="w-8 h-8 mr-3 text-amber-500"></i>
+      Solar Repair Request
+    </h2>
+    <p class="text-gray-400 text-lg mb-8">
+      Report your solar installation issue. Pin exact location on map for efficient service.
+    </p>
+
+    <div class="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
+      <div id="repair-map"></div>
+
+      <div class="grid grid-cols-2 gap-3 mt-4">
+        <input type="text" id="user-name" placeholder="Your Name" class="input-field">
+        <input type="text" id="user-phone" placeholder="Phone Number" class="input-field">
+      </div>
+      <div class="grid grid-cols-1 gap-3 mt-3">
+        <input type="text" id="issue-desc" placeholder="Describe Issue" class="input-field">
+      </div>
+
+      <button id="submit-repair-btn" class="mt-4 w-full py-3 rounded-lg text-gray-900 solar-gradient font-semibold hover:opacity-90 transition" disabled>
+        Submit Repair Request
+      </button>
+
+      <p id="auth-warning" class="text-red-400 mt-4 text-sm">Please Sign In to submit a repair request.</p>
+    </div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>lucide.createIcons();</script>
+
+<script>
+  // Map setup
+  const repairMap = L.map('repair-map').setView([26.91, 75.79], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(repairMap);
+  const marker = L.marker([26.91, 75.79], { draggable: true }).addTo(repairMap);
+
+  // Marker position on drag
+  marker.on('dragend', ()=>{
+    const pos = marker.getLatLng();
+    console.log('Selected location:', pos.lat, pos.lng);
+  });
+
+  // Submit button
+  const submitBtn = document.getElementById('submit-repair-btn');
+  submitBtn.addEventListener('click', ()=>{
+    const name = document.getElementById('user-name').value;
+    const phone = document.getElementById('user-phone').value;
+    const issue = document.getElementById('issue-desc').value;
+    const coords = marker.getLatLng();
+
+    if(!name || !phone || !issue){ alert("Fill all fields"); return; }
+
+    const requestData = { name, phone, issue, location: coords };
+    console.log("Repair request submitted:", requestData);
+    alert("Repair request submitted successfully! Team will contact you soon.");
+  });
+</script>
+</body>
+</html>

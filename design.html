@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Solar Design Assist | AI SolarTech Labs</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+  body { font-family: 'Inter', sans-serif; background-color: #0d1117; color: #c9d1d9; }
+  .solar-gradient { background-image: linear-gradient(to right, #f59e0b, #eab308); }
+  .card { transition: transform 0.3s, box-shadow 0.3s; background-color: #161b22; border: 1px solid #30363d; }
+  .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(245, 158, 11, 0.2); }
+  .icon-box { display: inline-flex; align-items: center; justify-content: center; background-color: #f59e0b33; color: #f59e0b; }
+  .modal-backdrop { background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(5px); }
+  #design-map { height: 350px; border-radius: 0.5rem; border: 1px solid #4b5563; }
+  #design-svg { width: 100%; height: 300px; border: 1px solid #4b5563; border-radius: 0.5rem; background-color:#161b22; display:block; margin-top:10px; }
+</style>
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.6.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.6.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "YOUR_FIREBASE_API_KEY",
+    authDomain: "YOUR_FIREBASE_PROJECT.firebaseapp.com",
+    projectId: "YOUR_FIREBASE_PROJECT_ID",
+    storageBucket: "YOUR_FIREBASE_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  window.auth = auth;
+  window.provider = provider;
+
+  window.signInUser = async () => { try { await signInWithPopup(auth, provider); } catch(err){console.error(err); alert("Sign-in failed."); }};
+  window.signOutUser = async () => { try { await signOut(auth); } catch(err){console.error(err); alert("Sign-out failed."); }};
+
+  window.onAuthStateChanged(auth, (user) => {
+    const authUI = document.getElementById("auth-ui-container");
+    const runBtn = document.getElementById("run-design-btn");
+    const authWarning = document.getElementById("auth-warning");
+
+    if(user){
+      authUI.innerHTML = `
+        <div class="flex items-center space-x-2">
+          <img src="${user.photoURL}" class="w-8 h-8 rounded-full border border-gray-500">
+          <span class="text-sm font-medium">${user.displayName}</span>
+          <button onclick="signOutUser()" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Sign Out</button>
+        </div>`;
+      runBtn.disabled = false;
+      authWarning.classList.add("hidden");
+    } else {
+      authUI.innerHTML = `<button onclick="signInUser()" class="px-3 py-1 rounded bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold text-sm">Sign In with Google</button>`;
+      runBtn.disabled = true;
+      authWarning.classList.remove("hidden");
+    }
+  });
+</script>
+</head>
+<body>
+<header class="bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50 shadow-lg border-b border-gray-700">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <h1 class="text-2xl font-extrabold text-white">
+      <a href="index.html" class="solar-gradient bg-clip-text text-transparent">AI SolarTech</a> Labs
+    </h1>
+    <div class="flex items-center space-x-4">
+      <nav class="hidden md:flex space-x-6">
+  <a href="index.html" class="hover:text-amber-400 font-semibold text-white">Home</a>
+  <a href="detection.html" class="hover:text-amber-400">Detection</a>
+  <a href="design.html" class="hover:text-amber-400">Design Assist</a>
+  <a href="installation.html" class="hover:text-amber-400">Installation</a>
+  <a href="repair.html" class="hover:text-amber-400">Repair</a>
+  <a href="login.html" class="hover:text-amber-400">Login</a>
+</nav>
+
+      <div id="auth-ui-container">
+        <div class="text-xs font-medium px-3 py-1 rounded-full bg-gray-700 text-gray-300 flex items-center">
+          <i data-lucide="loader-circle" class="w-4 h-4 mr-1 animate-spin"></i>
+          Initializing Auth...
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="py-20 bg-[#161b22] border-t border-gray-700">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h3 class="text-4xl font-bold text-white mb-4 flex items-center justify-center">
+      <i data-lucide="layout" class="w-8 h-8 mr-3 text-amber-500"></i>
+      Rooftop Design Assist Tool
+    </h3>
+    <p class="text-xl text-gray-400 max-w-4xl mx-auto mb-12">
+      Plan your rooftop solar layout efficiently. Input rooftop dimensions, panel preferences, or select location on map for an AI-assisted design mockup.
+    </p>
+
+    <div class="max-w-lg mx-auto p-8 rounded-xl bg-gray-800 shadow-2xl border border-gray-700 space-y-6">
+      
+      <div id="design-map"></div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <input type="number" id="roof-width" placeholder="Rooftop Width (m)"
+          class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:border-amber-500 focus:ring-amber-500 text-white" step="any">
+        <input type="number" id="roof-length" placeholder="Rooftop Length (m)"
+          class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:border-amber-500 focus:ring-amber-500 text-white" step="any">
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <input type="number" id="panel-length" placeholder="Panel Length (m)"
+          class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:border-amber-500 focus:ring-amber-500 text-white" step="any">
+        <input type="number" id="panel-width" placeholder="Panel Width (m)"
+          class="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:border-amber-500 focus:ring-amber-500 text-white" step="any">
+      </div>
+
+      <button id="run-design-btn"
+        class="w-full px-4 py-3 text-lg font-semibold rounded-lg text-gray-900 solar-gradient hover:opacity-90 transition"
+        disabled>
+        Generate Design Mockup
+      </button>
+
+      <div id="design-output" class="mt-8 text-left p-4 rounded-lg bg-gray-700 hidden">
+        <h4 class="text-lg font-semibold text-white mb-2 flex items-center">
+          <i data-lucide="grid" class="w-5 h-5 mr-2"></i>
+          Layout Output
+        </h4>
+        <pre id="design-json-output" class="whitespace-pre-wrap break-words text-sm bg-gray-800 p-3 rounded-lg text-green-300 overflow-x-auto"></pre>
+        <div class="mt-4">
+          <h5 class="text-md font-semibold text-white mb-2 flex items-center">
+            <i data-lucide="image" class="w-4 h-4 mr-2"></i>
+            Design Visualization
+          </h5>
+          <svg id="design-svg"></svg>
+        </div>
+      </div>
+      <p id="auth-warning" class="text-sm text-red-400 mt-4">
+        Please Sign In to use the Design Assist feature.
+      </p>
+    </div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>lucide.createIcons();</script>
+
+<script>
+  // Map Setup
+  let designMap = L.map('design-map').setView([26.91, 75.79], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(designMap);
+
+  let marker = L.marker([26.91,75.79], {draggable:true}).addTo(designMap);
+  marker.on('dragend', () => {
+    const pos = marker.getLatLng();
+    console.log('Marker moved to:', pos.lat, pos.lng);
+  });
+
+  // Mock Design Assist Logic
+  const runDesignBtn = document.getElementById('run-design-btn');
+  const designOutput = document.getElementById('design-output');
+  const designJsonOutput = document.getElementById('design-json-output');
+  const designSvg = document.getElementById('design-svg');
+
+  runDesignBtn.addEventListener('click', () => {
+    const roofW = parseFloat(document.getElementById('roof-width').value);
+    const roofL = parseFloat(document.getElementById('roof-length').value);
+    const panelW = parseFloat(document.getElementById('panel-width').value);
+    const panelL = parseFloat(document.getElementById('panel-length').value);
+
+    if(!roofW || !roofL || !panelW || !panelL) { alert("Please enter all rooftop and panel dimensions."); return; }
+
+    const panelsX = Math.floor(roofW / panelW);
+    const panelsY = Math.floor(roofL / panelL);
+    const totalPanels = panelsX * panelsY;
+
+    const mockDesign = {
+      rooftop_width_m: roofW,
+      rooftop_length_m: roofL,
+      panel_width_m: panelW,
+      panel_length_m: panelL,
+      panels_along_width: panelsX,
+      panels_along_length: panelsY,
+      total_panels: totalPanels,
+      coordinates: marker.getLatLng()
+    };
+
+    designJsonOutput.textContent = JSON.stringify(mockDesign,null,2);
+
+    // Draw panels as SVG rectangles
+    const svgWidth = 400;
+    const svgHeight = 300;
+    designSvg.innerHTML = '';
+    designSvg.setAttribute('viewBox',`0 0 ${svgWidth} ${svgHeight}`);
+
+    const panelWpx = svgWidth / panelsX;
+    const panelHpx = svgHeight / panelsY;
+
+    for(let y=0;y<panelsY;y++){
+      for(let x=0;x<panelsX;x++){
+        const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+        rect.setAttribute("x", x*panelWpx + 1);
+        rect.setAttribute("y", y*panelHpx + 1);
+        rect.setAttribute("width", panelWpx-2);
+        rect.setAttribute("height", panelHpx-2);
+        rect.setAttribute("fill","#f59e0b");
+        rect.setAttribute("stroke","#c9d1d9");
+        rect.setAttribute("stroke-width","1");
+        designSvg.appendChild(rect);
+      }
+    }
+
+    designOutput.classList.remove('hidden');
+  });
+</script>
+</body>
+</html>

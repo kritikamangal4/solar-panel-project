@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI PV Detection & Verification | AI SolarTech Labs</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #0d1117; color: #c9d1d9; }
+    .solar-gradient { background-image: linear-gradient(to right, #f59e0b, #eab308); }
+    .card { transition: transform 0.3s, box-shadow 0.3s; background-color: #161b22; border: 1px solid #30363d; }
+    .card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(245, 158, 11, 0.2); }
+    .icon-box { display: inline-flex; align-items: center; justify-content: center; background-color: #f59e0b33; color: #f59e0b; }
+    .modal-backdrop { background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(5px); }
+    #map { height: 400px; border-radius: 0.5rem; border: 1px solid #4b5563; }
+</style>
+<!-- Firebase -->
+<script type="module">
+  // Import Firebase modules
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.6.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.6.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "YOUR_FIREBASE_API_KEY",
+    authDomain: "YOUR_FIREBASE_PROJECT.firebaseapp.com",
+    projectId: "YOUR_FIREBASE_PROJECT_ID",
+    storageBucket: "YOUR_FIREBASE_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  window.auth = auth;
+  window.provider = provider;
+
+  window.signInUser = async () => {
+    try { await signInWithPopup(auth, provider); }
+    catch (err) { console.error(err); alert("Sign-in failed."); }
+  };
+
+  window.signOutUser = async () => {
+    try { await signOut(auth); }
+    catch (err) { console.error(err); alert("Sign-out failed."); }
+  };
+
+  window.onAuthStateChanged(auth, (user) => {
+    const authUI = document.getElementById("auth-ui-container");
+    const runBtn = document.getElementById("run-detection-btn");
+    const authWarning = document.getElementById("auth-warning");
+
+    if(user) {
+      authUI.innerHTML = `
+        <div class="flex items-center space-x-2">
+          <img src="${user.photoURL}" class="w-8 h-8 rounded-full border border-gray-500">
+          <span class="text-sm font-medium">${user.displayName}</span>
+          <button onclick="signOutUser()" class="text-xs px-2 py-1 bg-gray-700 rounded hover:bg-gray-600">Sign Out</button>
+        </div>`;
+      runBtn.disabled = false;
+      authWarning.classList.add("hidden");
+    } else {
+      authUI.innerHTML = `<button onclick="signInUser()" class="px-3 py-1 rounded bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold text-sm">Sign In with Google</button>`;
+      runBtn.disabled = true;
+      authWarning.classList.remove("hidden");
+    }
+  });
+</script>
+</head>
+<body>
+<header class="bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50 shadow-lg border-b border-gray-700">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <h1 class="text-2xl font-extrabold text-white">
+      <a href="index.html" class="solar-gradient bg-clip-text text-transparent">AI SolarTech</a> Labs
+    </h1>
+    <div class="flex items-center space-x-4">
+      <nav class="hidden md:flex space-x-6">
+  <a href="index.html" class="hover:text-amber-400 font-semibold text-white">Home</a>
+  <a href="detection.html" class="hover:text-amber-400">Detection</a>
+  <a href="design.html" class="hover:text-amber-400">Design Assist</a>
+  <a href="installation.html" class="hover:text-amber-400">Installation</a>
+  <a href="repair.html" class="hover:text-amber-400">Repair</a>
+  <a href="login.html" class="hover:text-amber-400">Login</a>
+</nav>
+
+        <button id="nav-profile-button" class="text-white hover:text-amber-400 transition font-semibold">Profile</button>
+      </nav>
+      <div id="auth-ui-container">
+        <div class="text-xs font-medium px-3 py-1 rounded-full bg-gray-700 text-gray-300 flex items-center">
+          <i data-lucide="loader-circle" class="w-4 h-4 mr-1 animate-spin"></i>
+          Initializing Auth...
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="py-20 bg-[#161b22] border-t border-gray-700" id="detection">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h3 class="text-4xl font-bold text-white mb-4 flex items-center justify-center">
+      <i data-lucide="scan" class="w-8 h-8 mr-3 text-amber-500"></i>
+      Rooftop PV Verification Pipeline
+    </h3>
+    <p class="text-xl text-gray-400 max-w-4xl mx-auto mb-12">
+      Input coordinates or select location on map for PM Surya Ghar subsidy verification.
+    </p>
+
+    <div class="max-w-lg mx-auto p-8 rounded-xl bg-gray-800 shadow-2xl border border-gray-700 space-y-4">
+      <div id="map"></div>
+
+      <div class="flex space-x-2">
+        <input type="number" id="latitude-input" placeholder="Latitude (e.g., 26.91)"
+        class="w-1/2 px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:border-amber-500 focus:ring-amber-500 text-white" step="any">
+        <input type="number" id="longitude-input" placeholder="Longitude (e.g., 75.79)"
+        class="w-1/2 px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:border-amber-500 focus:ring-amber-500 text-white" step="any">
+      </div>
+      <button id="select-coord-btn"
+        class="w-full px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-700 text-white font-semibold transition disabled:opacity-50">
+        Select Coordinates
+      </button>
+
+      <div id="location-display" class="text-sm text-gray-400 p-2 border border-dashed border-gray-600 rounded-lg hidden">
+        <i data-lucide="map-pin" class="w-4 h-4 inline mr-1"></i>
+        Site ID: <span id="sample-id-display" class="font-semibold text-white">N/A</span> | Location: <span id="selected-area-name" class="font-semibold text-white"></span>
+      </div>
+
+      <button id="run-detection-btn"
+        class="w-full px-4 py-3 text-lg font-semibold rounded-lg text-gray-900 solar-gradient hover:opacity-90 transition disabled:opacity-50"
+        disabled>
+        Run PV Verification
+      </button>
+
+      <div id="detection-output" class="mt-8 text-left p-4 rounded-lg bg-gray-700 hidden">
+        <h4 class="text-lg font-semibold text-white mb-2 flex items-center">
+          <i data-lucide="bar-chart-3" class="w-5 h-5 mr-2"></i>
+          Verification Output
+        </h4>
+        <pre id="json-output" class="whitespace-pre-wrap break-words text-sm bg-gray-800 p-3 rounded-lg text-green-300 overflow-x-auto"></pre>
+        <div class="mt-4">
+          <h5 class="text-md font-semibold text-white mb-2 flex items-center">
+            <i data-lucide="image" class="w-4 h-4 mr-2"></i>
+            Audit Artifact Mockup
+          </h5>
+          <div id="artifact-mockup" class="p-4 bg-gray-900 text-center text-sm text-gray-400 rounded-lg border border-dashed border-amber-500">
+            [Image Placeholder: AI-generated overlay]
+          </div>
+        </div>
+      </div>
+      <p id="auth-warning" class="text-sm text-red-400 mt-4 hidden">
+        Please Sign In to use the AI Detection feature.
+      </p>
+    </div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>lucide.createIcons();</script>
+
+<script>
+  // Map Setup
+  let map = L.map('map').setView([26.91, 75.79], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+  let marker = null;
+  const latitudeInput = document.getElementById('latitude-input');
+  const longitudeInput = document.getElementById('longitude-input');
+  const selectCoordBtn = document.getElementById('select-coord-btn');
+  const locationDisplay = document.getElementById('location-display');
+  const selectedAreaName = document.getElementById('selected-area-name');
+  const sampleIdDisplay = document.getElementById('sample-id-display');
+  const runDetectionBtn = document.getElementById('run-detection-btn');
+  const detectionOutput = document.getElementById('detection-output');
+  const jsonOutput = document.getElementById('json-output');
+  const artifactMockup = document.getElementById('artifact-mockup');
+
+  let selectedLocation = null;
+
+  function handleSelectArea() {
+    const lat = parseFloat(latitudeInput.value);
+    const lon = parseFloat(longitudeInput.value);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      if(marker) { marker.setLatLng([lat, lon]); }
+      else {
+        marker = L.marker([lat, lon], {draggable:true}).addTo(map);
+        marker.on('dragend',()=>{const pos=marker.getLatLng();latitudeInput.value=pos.lat.toFixed(6);longitudeInput.value=pos.lng.toFixed(6);handleSelectArea();});
+      }
+      map.setView([lat, lon], 16);
+      selectedLocation={lat:lat, lon:lon, name:`${lat.toFixed(4)}, ${lon.toFixed(4)}`, sample_id:Math.floor(Math.random()*89999)+10000};
+      selectedAreaName.textContent=selectedLocation.name;
+      sampleIdDisplay.textContent=selectedLocation.sample_id;
+      locationDisplay.classList.remove('hidden');
+      runDetectionBtn.disabled = false;
+    }
+  }
+
+  selectCoordBtn.addEventListener('click', handleSelectArea);
+  map.on('click',(e)=>{latitudeInput.value=e.latlng.lat.toFixed(6);longitudeInput.value=e.latlng.lng.toFixed(6);handleSelectArea();});
+
+  // Mock Detection
+  function runDetection() {
+    if(!selectedLocation) return;
+    runDetectionBtn.disabled=true;
+    runDetectionBtn.textContent="Analyzing Site...";
+    detectionOutput.classList.remove('hidden');
+    jsonOutput.textContent=`Running AI PV Classification for Sample ID ${selectedLocation.sample_id}...`;
+    artifactMockup.innerHTML=`<div class="mt-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>Analyzing rooftop imagery...`;
+
+    setTimeout(()=>{
+      const pvPresent = Math.random()>0.4;
+      const qc_status = pvPresent ? "VERIFIABLE" : "NOT_VERIFIABLE";
+      const pv_area_sqm_est = pvPresent ? (Math.random()*50+10).toFixed(1) : 0;
+      const resultJSON = { sample_id:selectedLocation.sample_id, lat:selectedLocation.lat, lon:selectedLocation.lon, has_solar:pvPresent, qc_status:qc_status, pv_area_sqm_est:parseFloat(pv_area_sqm_est) };
+      jsonOutput.textContent=JSON.stringify(resultJSON,null,2);
+      artifactMockup.innerHTML=pvPresent ? `<div class="text-green-400 font-semibold flex items-center justify-center"><i data-lucide="square-dot" class="w-5 h-5 mr-2"></i> VERIFIABLE: PV panels detected (${pv_area_sqm_est} m²).</div>` : `<div class="text-red-400 font-semibold flex items-center justify-center"><i data-lucide="cloud-off" class="w-5 h-5 mr-2"></i> NOT VERIFIABLE: No PV detected.</div>`;
+      runDetectionBtn.disabled=false;
+      runDetectionBtn.textContent="Run PV Verification";
+      lucide.createIcons();
+    },2000);
+  }
+
+  runDetectionBtn.addEventListener('click', runDetection);
+</script>
+</body>
+</html>
